@@ -28,6 +28,9 @@ public class WcController {
 						return res.bodyToMono(Test.class);
 					} else {
 						log.info("Non Pass => {}", res.statusCode());
+						/***
+						 * CustomException 만들어서 넣기
+						 */
 						return Mono.error(new RuntimeException("HTTP Status Code: " + res.statusCode()));
 					}
 				}).retryWhen(Retry.fixedDelay(3, Duration.ofSeconds(1))
