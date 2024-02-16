@@ -9,12 +9,16 @@ import lombok.NoArgsConstructor;
  * @author jkmo2
  */
 @Getter
-@AllArgsConstructor
 @NoArgsConstructor
-public class Test {
+public class ResponseDto {
 
 	Integer status;
 	Object data;
 	String show;
 	
+	ResponseDto(Integer status, Class<?> data, String show){
+		this.status = status;
+		this.data = data;
+		this.show = show;
+	}
 }
