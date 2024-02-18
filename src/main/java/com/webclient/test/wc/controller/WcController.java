@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,15 +22,26 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class WcController {
 
+	private final ApiWebClient apiWebClient;
+	
+	/***
+	 * 동적으로 baseUrl을 지정하여 각 컨트롤러에서 각기 다른 url로 통신할 수 있도록 만
+	 * @param apiWebClient
+	 * @param baseUrl
+	 */
 	@Autowired
-	ApiWebClient apiWebClient;
-
+	public WcController(ApiWebClient apiWebClient, @Value("${api.baseUrl}") String baseUrl) {
+		this.apiWebClient = apiWebClient;
+		apiWebClient.setBaseUrl(baseUrl);
+	}
+	
+	
 	@GetMapping("/")
 	public List<TestVo> findById() {
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/", testvo);
-		log.info("Status = {}", result.getStatus());
-
+		ResponseDto result = apiWebClient.postApi("/", testvo, ResponseDto.class).block();
+		
+		// [Object]를 안전하게 바꾸는 형변환하기
 		List<TestVo> rslt = new ArrayList<>();
 		if (result.getData() instanceof List<?>) { // true
 			for (Object obj : (List<?>) result.getData()) {
@@ -40,13 +52,20 @@ public class WcController {
 		}
 		return rslt;
 	}
-	
-	@GetMapping("/1")
-	public Integer findById2() {
-		TestVo testvo = new TestVo("ya_name", "ya_age");
-		ResponseDto result = apiWebClient.postApi("/1", testvo);
-		return (Integer) result.getData();
+	@GetMapping("/2")
+	public TestVo timeTest() {
+		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
+		ResponseDto result = apiWebClient.postApi("/2", testvo, ResponseDto.class).block();
+		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
+		return resTestVo;
 	}
+	
+//	@GetMapping("/1")
+//	public Integer findById2() {
+//		TestVo testvo = new TestVo("ya_name", "ya_age");
+//		ResponseDto result = apiWebClient.postApi("/1", testvo);
+//		return (Integer) result.getData();
+//	}
 
 	/***
 	 * 변경을 원하는 클래스 타입으로 지정
