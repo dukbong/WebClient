@@ -2,8 +2,7 @@
 
 ![image](https://github.com/dukbong/WebClient/assets/37864182/aa4e135f-8439-4087-8f2b-2766ea9c935b)
 
-![image](https://github.com/dukbong/WebClient/assets/37864182/3ab50a9c-0b10-4574-9e25-1ff8ffa57d5c)
-
+![image](https://github.com/dukbong/WebClient/assets/37864182/3456540c-0125-48ae-9797-8b6ef90b9817)
 
 # 확인해야 할 사항
 
