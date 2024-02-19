@@ -7,12 +7,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.webclient.test.wc.apicomponent.ApiWebClient;
+import com.webclient.test.wc.customannotation.ApiAop;
 import com.webclient.test.wc.dto.ResponseDto;
 import com.webclient.test.wc.dto.TestVo;
 
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @Slf4j
+@ApiAop(methods = {"findById"})
 public class WcController {
 
 	private final ApiWebClient apiWebClient;
@@ -29,17 +31,20 @@ public class WcController {
 	 * @param apiWebClient
 	 * @param baseUrl
 	 */
-	@Autowired
 	public WcController(ApiWebClient apiWebClient, @Value("${api.baseUrl}") String baseUrl) {
 		this.apiWebClient = apiWebClient;
 		apiWebClient.setBaseUrl(baseUrl);
 	}
 	
-	
+
+	/***
+	 * StatusResponseDto와 ResponseDto의 역할은 다르다.
+	 * @return
+	 */
 	@GetMapping("/")
-	public List<TestVo> findById() {
+	public ResponseEntity<ResponseDto> findById() {
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/", testvo, ResponseDto.class).block();
+		ResponseDto result = apiWebClient.postApi("/", testvo, "testToken" ,ResponseDto.class).block();
 		
 		// [Object]를 안전하게 바꾸는 형변환하기
 		List<TestVo> rslt = new ArrayList<>();
@@ -50,12 +55,12 @@ public class WcController {
 				}
 			}
 		}
-		return rslt;
+		return ResponseEntity.ok().body(result);
 	}
 	@GetMapping("/2")
 	public TestVo timeTest() {
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/2", testvo, ResponseDto.class).block();
+		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
 		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
 		return resTestVo;
 	}
@@ -77,7 +82,6 @@ public class WcController {
 	 */
 	private <T> T convertObjToClassType(LinkedHashMap<?, ?> map, Class<T> clazz) {
 		try {
-			log.info("class type = {}", clazz.getDeclaringClass());
 			log.info("class type = {}", clazz.getName());
 			
 			Constructor<T> constructor = clazz.getConstructor();
