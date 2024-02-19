@@ -1,7 +1,8 @@
 # WebClient
 
-![image](https://github.com/dukbong/WebClient/assets/37864182/180f82b4-c5b1-42b2-8c44-e5b02eee6563)
+![image](https://github.com/dukbong/WebClient/assets/37864182/ba5daaa0-c214-4983-a989-dd3033a309a6)
 
+![image](https://github.com/dukbong/WebClient/assets/37864182/73fb5f52-ed05-4690-bcf9-2cbcc8f42412)
 
 # 확인해야 할 사항
 
