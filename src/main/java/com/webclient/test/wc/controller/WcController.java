@@ -8,10 +8,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.webclient.test.wc.apicomponent.ApiWebBuilder;
 import com.webclient.test.wc.apicomponent.ApiWebClient;
 import com.webclient.test.wc.customannotation.ApiAop;
 import com.webclient.test.wc.dto.ResponseDto;
@@ -23,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @ApiAop(methods = {"findById"})
 public class WcController {
-
 	private final ApiWebClient apiWebClient;
 	
 	/***
@@ -57,13 +58,13 @@ public class WcController {
 		}
 		return ResponseEntity.ok().body(result);
 	}
-	@GetMapping("/2")
-	public TestVo timeTest() {
-		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
-		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
-		return resTestVo;
-	}
+//	@GetMapping("/2")
+//	public TestVo timeTest() {
+//		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
+//		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
+//		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
+//		return resTestVo;
+//	}
 	
 //	@GetMapping("/1")
 //	public Integer findById2() {

@@ -6,6 +6,7 @@ import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -17,16 +18,7 @@ import reactor.netty.http.client.HttpClient;
 @Configuration
 public class ApiWebBuilder {
 	
-	private final String baseUrl;
 
-	/***
-	 * baseUrl을 컨트롤러마다 지정해서 사용할 수 있도록 유연성 제공
-	 * @param baseUrl
-	 */
-	public ApiWebBuilder(@Value("${api.baseUrl}") String baseUrl) {
-		this.baseUrl = baseUrl;
-	}
-	
 	@Bean
 	public WebClient localWebClient() {
 		
@@ -60,7 +52,6 @@ public class ApiWebBuilder {
 		
 		return WebClient.builder()
 //						.baseUrl("http://localhost:8099")
-						.baseUrl(this.baseUrl)
 						// [max in memory] default = 256KB
 						.codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
 						.clientConnector(new ReactorClientHttpConnector(client))
