@@ -45,7 +45,7 @@ public class ExceptionHandling {
 		log.error("1. Exception Message : {}",e.getMessage());
 		log.error("2. Line : {}", e.getStackTrace()[0].getLineNumber());
 		log.error("==============================");
-		return new ResponseEntity<>(StatusResponseDto.serverFail(HttpStatus.GATEWAY_TIMEOUT.value(), e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		return new ResponseEntity<>(StatusResponseDto.serverFail(ErrorCode.TEST_500.getHttpStatus().value(), ErrorCode.TEST_500.getDetail()), HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 	
 }

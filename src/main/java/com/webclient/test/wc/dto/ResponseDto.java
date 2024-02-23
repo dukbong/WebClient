@@ -18,11 +18,11 @@ import lombok.ToString;
 @NoArgsConstructor
 @ToString
 public class ResponseDto {
-
-	Integer status;
-	Object data;
 	
-	ResponseDto(Integer status, Class<?> data){
+	private String status;
+	private Object data;
+	
+	ResponseDto(String status, Class<?> data){
 		this.status = status;
 		this.data = data;
 	}

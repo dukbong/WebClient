@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @Slf4j
-@ApiAop(methods = {"findById"})
+//@ApiAop(methods = {"findById"})
 public class WcController {
 	private final ApiWebClient apiWebClient;
 	
@@ -34,7 +36,7 @@ public class WcController {
 	 */
 	public WcController(ApiWebClient apiWebClient, @Value("${api.baseUrl}") String baseUrl) {
 		this.apiWebClient = apiWebClient;
-		apiWebClient.setBaseUrl(baseUrl);
+		apiWebClient.setRequestInfo(baseUrl);
 	}
 	
 
@@ -43,7 +45,13 @@ public class WcController {
 	 * @return
 	 */
 	@GetMapping("/")
-	public ResponseEntity<ResponseDto> findById() {
+	public ResponseEntity<ResponseDto> findById(HttpServletRequest request) {
+		
+		String ip = request.getLocalAddr();
+		log.info("=========================> {}", ip);
+		
+		// userId와 현재 URL을 반환
+		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
 		ResponseDto result = apiWebClient.postApi("/", testvo, "testToken" ,ResponseDto.class).block();
 		
