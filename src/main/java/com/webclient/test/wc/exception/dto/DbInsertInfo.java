@@ -13,7 +13,7 @@ public class DbInsertInfo {
 
 	private String time = LocalDateTime.now().toString();
 	private String from;
-	private int count;
+	private Integer count;
 	private String to;
 	private String userSn;
 	private String url;

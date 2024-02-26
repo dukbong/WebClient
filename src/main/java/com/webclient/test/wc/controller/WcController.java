@@ -66,13 +66,15 @@ public class WcController {
 		}
 		return ResponseEntity.ok().body(result);
 	}
-//	@GetMapping("/2")
-//	public TestVo timeTest() {
-//		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-//		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
-//		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
-//		return resTestVo;
-//	}
+	@GetMapping("/2")
+	public TestVo timeTest(HttpServletRequest request) {
+		String ip = request.getLocalAddr();
+		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
+		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
+		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
+		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
+		return resTestVo;
+	}
 	
 //	@GetMapping("/1")
 //	public Integer findById2() {

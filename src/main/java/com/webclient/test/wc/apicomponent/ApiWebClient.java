@@ -1,17 +1,19 @@
 package com.webclient.test.wc.apicomponent;
 
+import java.net.CookieStore;
+import java.net.HttpCookie;
 import java.net.URI;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -23,7 +25,6 @@ import com.webclient.test.wc.exception.dto.DbInsertInfo;
 import io.netty.handler.timeout.TimeoutException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -40,18 +41,33 @@ import reactor.util.retry.Retry;
 public class ApiWebClient {
 
 	private final WebClient localWebClient;
+	private final CookieStore cookieStore;
 	private String baseUrl;
 	private ObjectMapper objectMapper = new ObjectMapper();
-	private String cookie;
+//	private String cookie;
 	private String mainUrl;
 	
 	public void setRequestInfo(String baseUrl) {
 		this.baseUrl = baseUrl;
 	}
 	
+	public void makeCookie(String key, String value) {
+		HttpCookie cookie = new HttpCookie(key, value);
+		cookieStore.add(null, cookie);
+	}
+	
+//	public String cookieConvertString(CookieStore cookieStore) {
+//        String cookieString = cookieStore.getCookies().stream()
+//                .map(cookie -> cookie.getName() + "=" + cookie.getValue())
+//                .collect(Collectors.joining("; "));
+//        return cookieString;
+//	}
+	
 	public void setCookie(String userId, String requestUrl) {
 		this.mainUrl = requestUrl;
-		this.cookie = new StringBuffer().append("userSn=").append(userId).append("; ").append("url=").append(requestUrl).toString();
+		makeCookie("userSn", userId);
+		makeCookie("url", requestUrl);
+//		this.cookie = new StringBuffer().append("userSn=").append(userId).append("; ").append("url=").append(requestUrl).toString();
 	}
 	
 	private int portSearch(String targetUrl) {
@@ -77,22 +93,57 @@ public class ApiWebClient {
 		String mainSubject = getSubjectName(portSearch(mainUrl));
 		dbInfo.from(mainSubject).to(targetSubject).url(baseUrl + uri).param(objectConvertJson(vo)).count(0);
 		
-		cookie = new StringBuffer().append(cookie).append("; ")
-								   .append("to=").append(mainSubject).append("; ")
-								   .append("from=").append(targetSubject).append("; ")
-								   .append("count=").append(dbInfo.getCount()).append("; ")
-								   .toString();
-		// WebClient는 불변객체이므로 직접 변경은 불가능하다.
-		WebClient useClient = localWebClient.mutate().baseUrl(baseUrl).build();
+		makeCookie("to", mainSubject);
+		makeCookie("from", targetSubject);
+		makeCookie("count", dbInfo.getCount().toString());
+//		cookie = new StringBuffer().append(cookie).append("; ")
+//								   .append("to=").append(mainSubject).append("; ")
+//								   .append("from=").append(targetSubject).append("; ")
+//								   .append("count=").append(dbInfo.getCount()).append("; ")
+//								   .toString();
+		ExchangeFilterFunction filterFunction = (clientRequest, nextFilter) -> {
+//			log.info("================================>");
+		    String cookieHeader = cookieStore.getCookies().stream()
+		            .peek(cookie -> {
+		                if (cookie.getName().equals("count")) {
+		                    cookie.setValue(dbInfo.countPlus().getCount().toString());
+		                }
+		            })
+		            .map(HttpCookie::toString)
+		            .collect(Collectors.joining("; "));
+//		    log.info("test : {} ", cookieHeader);
+		    // 새로운 쿠키 전달을 위함
+		    ClientRequest newRequest = ClientRequest.from(clientRequest)
+		            .header(HttpHeaders.COOKIE, cookieHeader)
+		            .build();
+//			log.info("================================>");
+		    return nextFilter.exchange(newRequest);
+		};
 		
-		return useClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token).header(HttpHeaders.COOKIE, cookie)
+		// WebClient는 불변객체이므로 직접 변경은 불가능하다.
+		WebClient useClient = localWebClient.mutate().baseUrl(baseUrl)
+				.filter(filterFunction)
+//		        .filter(ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
+//		            log.debug("Request: {} {}", clientRequest.method(), clientRequest.url());
+//		            clientRequest.headers().forEach((name, values) -> values.forEach(value -> log.debug("{} : {}", name, value)));
+
+		            // 쿠키를 변경하고 원하는 값으로 설정
+//		            clientRequest.headers().add(HttpHeaders.COOKIE, "count=" + dbInfo.getCount());
+
+//		            return Mono.just(clientRequest);
+//		        	return nextFilter
+//		        }))
+				.build();
+//		useClient = useClient.filter(filterFunction);
+		return useClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+//				.header(HttpHeaders.COOKIE, cookieConvertString(cookieStore))
 				.body(BodyInserters.fromValue(vo)).accept(MediaType.APPLICATION_JSON).retrieve()
 				// [응답 서버로 부터 받은 에러를 log로 찍고 오류를 전파시키기]
 				.onStatus(HttpStatus::is4xxClientError, res -> {
 //					log.info("현재 URL : {}", baseUrl + uri);
 					log.error("응답 받은 상태 코드 4xx : {}", res.statusCode());
 					res.bodyToMono(bodyType).doOnNext(body -> {
-						dbInfo.message(objectConvertJson(body)).flag("Y").countPlus();
+						dbInfo.message(objectConvertJson(body)).flag("Y");
 //						String resMessage = objectConvertJson(body);
 //						String param = objectConvertJson(vo);
 						log.info(
@@ -109,7 +160,7 @@ public class ApiWebClient {
 //					log.info("현재 URL : {}", baseUrl + uri);
 					log.error("응답 받은 상태 코드 5xx : {}", res.statusCode());
 					res.bodyToMono(bodyType).doOnNext(body -> {
-						dbInfo.message(objectConvertJson(body)).flag("Y").countPlus();
+						dbInfo.message(objectConvertJson(body)).flag("Y");
 //						String resMessage = objectConvertJson(body);
 //						String param = objectConvertJson(vo);
 						log.info(
@@ -139,9 +190,27 @@ public class ApiWebClient {
 							// ReadTimeoutException 인지 확인
 							boolean isReadTimeoutException = error instanceof WebClientRequestException
 									&& error.getCause() instanceof TimeoutException;
-
+							
+//							boolean isCookieDNMTC = true;
+//							if (error instanceof WebClientResponseException) {
+//						        String responseBody = objectConvertJson(((WebClientResponseException) error).getResponseBodyAsString());
+//						        try {
+//						            // JSON 파싱하여 특정 키의 값을 확인
+//						            ObjectMapper mapper = new ObjectMapper();
+//						            JsonNode jsonNode = mapper.readTree(responseBody);
+//						            JsonNode testNode = jsonNode.get("status");
+//						            if (testNode != null && testNode.isTextual() && testNode.asText().equals("COOKIE_EMPTY")) {
+//						                // test 값이 TTTT인 경우에는 재시도하지 않음
+//						                isCookieDNMTC = false;
+//						            }
+//						        } catch (IOException e) {
+//						            // JSON 파싱 실패 시 처리
+//						            e.printStackTrace();
+//						        }
+//							}
+							
 							// 5xx 서버 에러이거나 ReadTimeoutException이 아닌 경우에만 true를 반환
-							return !is5xxServerError && !isReadTimeoutException;
+							return !is5xxServerError && !isReadTimeoutException /*&& !isCookieDNMTC*/;
 						})
 						// 재시도 하기 전 현재 시도에 대한 정보가 담겨 있다.
 						.doBeforeRetry(before -> {
@@ -168,24 +237,58 @@ public class ApiWebClient {
 							// [성공시 몇번만에 성공했는지 알고 싶다면 사용 가능]
 //							retryCount.incrementAndGet();
 //							dbInfo.count(String.valueOf(retryCount));
-				            cookie = new StringBuffer(cookie)
-				                    .append("; ")
-				                    .append("count=")
-				                    .append(dbInfo.getCount())
-				                    .toString();
-				            
+//				            cookie = new StringBuffer(cookie)
+//				                    .append("; ")
+//				                    .append("count=")
+//				                    .append(dbInfo.getCount())
+//				                    .toString();
+							removeCookie("count");
+//							dbInfo.countPlus();
+							makeCookie("count", dbInfo.getCount().toString());
 						}))
 				// 재시도 종료 후 에러가 발생하면 확인할 수 있다.
 				.doOnError(error -> {
-					log.info("uri = {}", baseUrl + uri);
-					log.error("1. 재시도 종료  : {}", error.getMessage());
-				}).doOnSuccess(success -> {
+//					dbInfo.countPlus();
+					String ClientShowMessage;
+			        if (error instanceof WebClientResponseException) {
+//			            log.error("WebClientResponseException occurred: {}", error.getMessage());
+			            dbInfo.message(error.getMessage());
+			            log.info(
+			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            ClientShowMessage = "서버에서 5xx 에러가 발생하였습니다.";
+			        } else if (error instanceof WebClientRequestException && error.getCause() instanceof TimeoutException) {
+//			            log.error("Read Timeout Exception occurred: {}", error.getMessage());
+			            dbInfo.message(error.getMessage());
+			            log.info(
+			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            ClientShowMessage = "요청 시간이 초과하였습니다.";
+			        } else {
+//			            log.error("Other error occurred: {}", error.getMessage());
+			            dbInfo.message(error.getMessage());
+			            log.info(
+			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            ClientShowMessage = "총 시도 횟수를 초과하였습니다.";
+			        }
+			        throw new RuntimeException(ClientShowMessage);
+				})
+				.doOnSuccess(success -> {
 //					String param = objectConvertJson(vo);
-					dbInfo.flag("N").message(objectConvertJson(success)).countPlus();
+					dbInfo.flag("N").message(objectConvertJson(success));
 					log.info("DB Insert [SUCCESS] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청 ID : {}, url : {}, ip : {},  구분 : {}, param : {}, 응답 메시지 : {}",
 //													LocalDate.now(), mainSubject, targetSubject, "요청 ID 아직 없음", (baseUrl + uri), "IP 아직 없음", 'N', param, success.toString());
 													dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(),"요청 ID", dbInfo.getUrl(), "IP",dbInfo.getFlag(),dbInfo.getParam(), dbInfo.getMessage());
 				});
+	}
+	
+	public void removeCookie(String key) {
+	    // 쿠키 스토어에서 제거할 쿠키를 찾아서 제거
+	    List<HttpCookie> cookiesToRemove = cookieStore.getCookies().stream()
+	            .filter(cookie -> cookie.getName().equals(key))
+	            .collect(Collectors.toList());
+	    cookiesToRemove.forEach(cookie -> cookieStore.remove(null, cookie));
 	}
 	
 	
