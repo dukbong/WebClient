@@ -10,14 +10,11 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.webclient.test.wc.apicomponent.ApiWebBuilder;
 import com.webclient.test.wc.apicomponent.ApiWebClient;
-import com.webclient.test.wc.customannotation.ApiAop;
 import com.webclient.test.wc.dto.ResponseDto;
 import com.webclient.test.wc.dto.TestVo;
 
@@ -27,16 +24,18 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 //@ApiAop(methods = {"findById"})
 public class WcController {
+	
 	private final ApiWebClient apiWebClient;
 	
+	@Value("${api.baseUrl}")
+	private String baseUrl;
 	/***
 	 * 동적으로 baseUrl을 지정하여 각 컨트롤러에서 각기 다른 url로 통신할 수 있도록 만
 	 * @param apiWebClient
 	 * @param baseUrl
 	 */
-	public WcController(ApiWebClient apiWebClient, @Value("${api.baseUrl}") String baseUrl) {
+	public WcController(ApiWebClient apiWebClient) {
 		this.apiWebClient = apiWebClient;
-		apiWebClient.setRequestInfo(baseUrl);
 	}
 	
 
@@ -51,6 +50,7 @@ public class WcController {
 		log.info("=========================> {}", ip);
 		
 		// userId와 현재 URL을 반환
+		apiWebClient.setRequestInfo(baseUrl);
 		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
 		ResponseDto result = apiWebClient.postApi("/", testvo, "testToken" ,ResponseDto.class).block();
@@ -69,6 +69,7 @@ public class WcController {
 	@GetMapping("/2")
 	public TestVo timeTest(HttpServletRequest request) {
 		String ip = request.getLocalAddr();
+		apiWebClient.setRequestInfo(baseUrl);
 		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
 		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();

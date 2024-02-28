@@ -22,8 +22,8 @@ public class ResponseDto {
 	private String status;
 	private Object data;
 	
-	ResponseDto(String status, Class<?> data){
-		this.status = status;
-		this.data = data;
-	}
+//	ResponseDto(String status, Class<?> data){
+//		this.status = status;
+//		this.data = data;
+//	}
 }

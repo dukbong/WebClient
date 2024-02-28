@@ -50,7 +50,10 @@ public class ApiWebBuilder {
 		return WebClient.builder()
 //						.baseUrl("http://localhost:8099")
 						// [max in memory] default = 256KB
-						.codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
+						.codecs(configurer -> configurer
+														.defaultCodecs()
+														.maxInMemorySize(2 * 1024 * 1024)
+						)
 						.clientConnector(new ReactorClientHttpConnector(client))
 						.build();
 	}

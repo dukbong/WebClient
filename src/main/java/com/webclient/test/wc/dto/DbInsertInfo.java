@@ -1,8 +1,7 @@
-package com.webclient.test.wc.exception.dto;
+package com.webclient.test.wc.dto;
 
 import java.time.LocalDateTime;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -76,6 +75,21 @@ public class DbInsertInfo {
     public DbInsertInfo message(String message) {
         this.message = message;
         return this;
+    }
+    
+    public DbInsertEntity covertEntity() {
+    	return DbInsertEntity.builder()
+    						 .requestTime(this.time)
+    						 .userIp(this.ip)
+    						 .count(this.count)
+    						 .ownerFrom(this.from)
+    						 .sendTo(this.to)
+    						 .userSn(this.userSn)
+    						 .url(this.url)
+    						 .flag(this.flag)
+    						 .param(this.param)
+    						 .message(this.message)
+    						 .build();
     }
     
 }

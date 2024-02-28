@@ -38,6 +38,7 @@ public class ExceptionHandling {
 		log.error("Catch Handler run...");
 		log.error("1. Exception Message : {}",e.getMessage());
 		log.error("2. Line : {}", e.getStackTrace()[0].getLineNumber());
+		e.printStackTrace();
 		log.error("요청 서버의 Exception Handler에게 전달");
 		log.error("==============================");
 //		return new ResponseEntity<>(StatusResponseDto.serverFail(ErrorCode.TEST_500.getHttpStatus().value(), ErrorCode.TEST_500.getDetail()), HttpStatus.INTERNAL_SERVER_ERROR);

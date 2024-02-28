@@ -1,10 +1,10 @@
 package com.webclient.test.wc.apicomponent;
 
-import java.net.CookieStore;
 import java.net.HttpCookie;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpHeaders;
@@ -20,7 +20,9 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.webclient.test.wc.exception.dto.DbInsertInfo;
+import com.webclient.test.wc.dto.DbInsertEntity;
+import com.webclient.test.wc.dto.DbInsertEntityRepository;
+import com.webclient.test.wc.dto.DbInsertInfo;
 
 import io.netty.handler.timeout.TimeoutException;
 import lombok.RequiredArgsConstructor;
@@ -41,14 +43,26 @@ import reactor.util.retry.Retry;
 public class ApiWebClient {
 
 	private final WebClient localWebClient;
-	private final CookieStore cookieStore;
-	private String baseUrl;
+//	private final CookieStore cookieStore;
+	private static final ThreadLocal<String> baseUrlThreadLocal = new ThreadLocal<>();
+	private static final ThreadLocal<String> mainUrlThreadLocal = new ThreadLocal<>();
+	private final InmemoryCookie cookieStore;
+	private final DbInsertEntityRepository dbInsertEntityRepository;
+//	private String baseUrl;
 	private ObjectMapper objectMapper = new ObjectMapper();
 //	private String cookie;
-	private String mainUrl;
+//	private String mainUrl;
 	
 	public void setRequestInfo(String baseUrl) {
-		this.baseUrl = baseUrl;
+		log.info("====> set 호출");
+		baseUrlThreadLocal.set(baseUrl);
+	}
+	
+	public String getBaseUrl() {
+		return baseUrlThreadLocal.get();
+	}
+	public String getMainUrl() {
+		return mainUrlThreadLocal.get();
 	}
 	
 	public void makeCookie(String key, String value) {
@@ -64,7 +78,7 @@ public class ApiWebClient {
 //	}
 	
 	public void setCookie(String userId, String requestUrl) {
-		this.mainUrl = requestUrl;
+		mainUrlThreadLocal.set(requestUrl);
 		makeCookie("userSn", userId);
 		makeCookie("url", requestUrl);
 //		this.cookie = new StringBuffer().append("userSn=").append(userId).append("; ").append("url=").append(requestUrl).toString();
@@ -89,9 +103,10 @@ public class ApiWebClient {
 		DbInsertInfo dbInfo = new DbInsertInfo();
 		// 동시성 문제를 해결하고 시도한 횟수를 알기 위한 변수
 //		AtomicInteger retryCount = new AtomicInteger(1);
-		String targetSubject = getSubjectName(portSearch(baseUrl));
-		String mainSubject = getSubjectName(portSearch(mainUrl));
-		dbInfo.from(mainSubject).to(targetSubject).url(baseUrl + uri).param(objectConvertJson(vo)).count(0);
+		log.info("=============> {}", getBaseUrl());
+		String targetSubject = getSubjectName(portSearch(getBaseUrl()));
+		String mainSubject = getSubjectName(portSearch(getMainUrl()));
+		dbInfo.from(mainSubject).to(targetSubject).url(getBaseUrl() + uri).param(objectConvertJson(vo)).count(0);
 		
 		makeCookie("to", mainSubject);
 		makeCookie("from", targetSubject);
@@ -121,7 +136,7 @@ public class ApiWebClient {
 		};
 		
 		// WebClient는 불변객체이므로 직접 변경은 불가능하다.
-		WebClient useClient = localWebClient.mutate().baseUrl(baseUrl)
+		WebClient useClient = localWebClient.mutate().baseUrl(getBaseUrl())
 				.filter(filterFunction)
 //		        .filter(ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
 //		            log.debug("Request: {} {}", clientRequest.method(), clientRequest.url());
@@ -146,9 +161,10 @@ public class ApiWebClient {
 						dbInfo.message(objectConvertJson(body)).flag("Y");
 //						String resMessage = objectConvertJson(body);
 //						String param = objectConvertJson(vo);
-						log.info(
-								"DB Insert [FAILD 4XX] ==> 요청시간 : {}, 요청 횟수 : {},  From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-								dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+//						log.info(
+//								"DB Insert [FAILD 4XX] ==> 요청시간 : {}, 요청 횟수 : {},  From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+//								dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+						saveToDb(dbInfo);
 					}).subscribe();
 					// 응답 헤더 값 확인 (JWT TOKEN)
 //					log.error("header = {}", res.headers().asHttpHeaders());
@@ -163,9 +179,10 @@ public class ApiWebClient {
 						dbInfo.message(objectConvertJson(body)).flag("Y");
 //						String resMessage = objectConvertJson(body);
 //						String param = objectConvertJson(vo);
-						log.info(
-								"DB Insert [FAILD 5XX & RETRY X] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-								dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+//						log.info(
+//								"DB Insert [FAILD 5XX & RETRY X] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+//								dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+						saveToDb(dbInfo);
 					}).subscribe();
 //					log.error("5xx 상태 코드 : {}", res.rawStatusCode());
 //					log.error("5xx 요청한 URL + URI : {}", baseUrl + uri);
@@ -250,40 +267,46 @@ public class ApiWebClient {
 				.doOnError(error -> {
 //					dbInfo.countPlus();
 					String ClientShowMessage;
+					dbInfo.flag("Y").message(error.getMessage());
 			        if (error instanceof WebClientResponseException) {
 //			            log.error("WebClientResponseException occurred: {}", error.getMessage());
-			            dbInfo.message(error.getMessage());
-			            log.info(
-			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+//			            dbInfo.message(error.getMessage());
+//			            log.info(
+//			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+//			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            saveToDb(dbInfo);
 			            ClientShowMessage = "서버에서 5xx 에러가 발생하였습니다.";
 			        } else if (error instanceof WebClientRequestException && error.getCause() instanceof TimeoutException) {
 //			            log.error("Read Timeout Exception occurred: {}", error.getMessage());
-			            dbInfo.message(error.getMessage());
-			            log.info(
-			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+//			            dbInfo.message(error.getMessage());
+//			            log.info(
+//			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+//			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            saveToDb(dbInfo);
 			            ClientShowMessage = "요청 시간이 초과하였습니다.";
 			        } else {
 //			            log.error("Other error occurred: {}", error.getMessage());
-			            dbInfo.message(error.getMessage());
-			            log.info(
-			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+//			            dbInfo.message(error.getMessage());
+//			            log.info(
+//			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+//			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			            saveToDb(dbInfo);
 			            ClientShowMessage = "총 시도 횟수를 초과하였습니다.";
 			        }
+			        // client view.
 			        throw new RuntimeException(ClientShowMessage);
 				})
 				.doOnSuccess(success -> {
 //					String param = objectConvertJson(vo);
 					dbInfo.flag("N").message(objectConvertJson(success));
-					log.info("DB Insert [SUCCESS] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청 ID : {}, url : {}, ip : {},  구분 : {}, param : {}, 응답 메시지 : {}",
+//					log.info("DB Insert [SUCCESS] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청 ID : {}, url : {}, ip : {},  구분 : {}, param : {}, 응답 메시지 : {}",
 //													LocalDate.now(), mainSubject, targetSubject, "요청 ID 아직 없음", (baseUrl + uri), "IP 아직 없음", 'N', param, success.toString());
-													dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(),"요청 ID", dbInfo.getUrl(), "IP",dbInfo.getFlag(),dbInfo.getParam(), dbInfo.getMessage());
+//													dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(),"요청 ID", dbInfo.getUrl(), "IP",dbInfo.getFlag(),dbInfo.getParam(), dbInfo.getMessage());
+					saveToDb(dbInfo);
 				});
 	}
 	
-	public void removeCookie(String key) {
+	private void removeCookie(String key) {
 	    // 쿠키 스토어에서 제거할 쿠키를 찾아서 제거
 	    List<HttpCookie> cookiesToRemove = cookieStore.getCookies().stream()
 	            .filter(cookie -> cookie.getName().equals(key))
@@ -292,13 +315,33 @@ public class ApiWebClient {
 	}
 	
 	
-	public String objectConvertJson(Object obj){
+	private String objectConvertJson(Object obj){
 		try {
 			return objectMapper.writeValueAsString(obj);
 		}catch(JsonProcessingException e) {
 			e.printStackTrace();
 			return null;
 		}
+	}
+	
+	private void saveToDb(DbInsertInfo dbInfo) {
+		log.info(
+				"DB Insert ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+				dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+		
+		Optional<DbInsertEntity> findEntity = dbInsertEntityRepository.findByCountAndRequestTime(dbInfo.getCount(), dbInfo.getTime());
+		if(findEntity.isPresent()) {
+			String entityMessage = findEntity.get().getMessage();
+			log.error("==================> {}", entityMessage);
+			String message = dbInfo.getMessage();
+			log.error("==================> {}", message);
+			findEntity.get().updateMessage(entityMessage + "\n" + message);
+			dbInsertEntityRepository.save(findEntity.get());
+			return;
+		}
+		
+		DbInsertEntity entity = dbInfo.covertEntity();
+		dbInsertEntityRepository.save(entity);
 	}
 	
 //	// 4xx, 5xx >> DB INSERT METHOD (미완성)
