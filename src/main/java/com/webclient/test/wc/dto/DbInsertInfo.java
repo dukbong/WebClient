@@ -4,13 +4,16 @@ import java.time.LocalDateTime;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 
 @Getter
 @NoArgsConstructor
+@ToString
 public class DbInsertInfo {
 
 	private String time = LocalDateTime.now().toString();
+	private String method;
 	private String from;
 	private Integer count;
 	private String to;
@@ -20,6 +23,12 @@ public class DbInsertInfo {
 	private String flag;
 	private String param;
 	private String message;
+	
+    public DbInsertInfo method(String method) {
+        this.method = method;
+        return this;
+    }
+
 	
 	public DbInsertInfo timeReset() {
 		this.time = LocalDateTime.now().toString();
@@ -79,6 +88,7 @@ public class DbInsertInfo {
     
     public DbInsertEntity covertEntity() {
     	return DbInsertEntity.builder()
+    						 .method(this.method)
     						 .requestTime(this.time)
     						 .userIp(this.ip)
     						 .count(this.count)

@@ -23,6 +23,8 @@ public class DbInsertEntity {
 	
 	private String requestTime;
 	
+	private String method;
+	
 	private Integer count;
 	
 	private String ownerFrom;
@@ -51,7 +53,8 @@ public class DbInsertEntity {
 
 	@Builder
 	public DbInsertEntity(Long id, String requestTime, Integer count, String ownerFrom, String sendTo, String userSn,
-			String userIp, String url, String flag, String param, String message) {
+			String userIp, String url, String flag, String param, String message, String method) {
+		this.method = method;
 		this.id = id;
 		this.requestTime = requestTime;
 		this.count = count;

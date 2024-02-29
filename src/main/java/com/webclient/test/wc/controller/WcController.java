@@ -3,6 +3,7 @@ package com.webclient.test.wc.controller;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,11 +20,13 @@ import com.webclient.test.wc.apicomponent.ApiWebClient;
 import com.webclient.test.wc.dto.ResponseDto;
 import com.webclient.test.wc.dto.TestVo;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
 @Slf4j
 //@ApiAop(methods = {"findById"})
+@RequiredArgsConstructor
 public class WcController {
 	
 	private final ApiWebClient apiWebClient;
@@ -34,10 +38,6 @@ public class WcController {
 	 * @param apiWebClient
 	 * @param baseUrl
 	 */
-	public WcController(ApiWebClient apiWebClient) {
-		this.apiWebClient = apiWebClient;
-	}
-	
 
 	/***
 	 * StatusResponseDto와 ResponseDto의 역할은 다르다.
@@ -50,10 +50,10 @@ public class WcController {
 		log.info("=========================> {}", ip);
 		
 		// userId와 현재 URL을 반환
-		apiWebClient.setRequestInfo(baseUrl);
-		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
+//		apiWebClient.setRequestInfo(baseUrl);
+		apiWebClient.setCookie("UserId", request.getRequestURL().toString(), baseUrl);
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/", testvo, "testToken" ,ResponseDto.class).block();
+		ResponseDto result = apiWebClient.request(HttpMethod.POST,"/", testvo, "testToken" ,ResponseDto.class).block();
 		
 		// [Object]를 안전하게 바꾸는 형변환하기
 		List<TestVo> rslt = new ArrayList<>();
@@ -66,15 +66,35 @@ public class WcController {
 		}
 		return ResponseEntity.ok().body(result);
 	}
+	
 	@GetMapping("/2")
 	public TestVo timeTest(HttpServletRequest request) {
 		String ip = request.getLocalAddr();
-		apiWebClient.setRequestInfo(baseUrl);
-		apiWebClient.setCookie("UserId", request.getRequestURL().toString());
+//		apiWebClient.setRequestInfo(baseUrl);
+		apiWebClient.setCookie("UserId", request.getRequestURL().toString(), baseUrl);
 		TestVo testvo = new TestVo("reqeust_body_name", "request_body_age");
-		ResponseDto result = apiWebClient.postApi("/2", testvo, "testToken", ResponseDto.class).block();
+		ResponseDto result = apiWebClient.request(HttpMethod.POST,"/2", testvo, "testToken", ResponseDto.class).block();
 		TestVo resTestVo = new TestVo(String.valueOf(result.getStatus()), (String)result.getData());
 		return resTestVo;
+	}
+	
+	@GetMapping("/3")
+	public ResponseEntity<ResponseDto> getTest(HttpServletRequest request) {
+		
+		String ip = request.getLocalAddr();
+		log.info("=========================> {}", ip);
+		
+		// userId와 현재 URL을 반환
+//		apiWebClient.setRequestInfo(baseUrl);
+		apiWebClient.setCookie("UserUser", request.getRequestURL().toString(), baseUrl);
+		
+		Map<String, String> map = new HashMap<>();
+		map.put("test","testui");
+		
+		ResponseDto result = apiWebClient.request(HttpMethod.GET, "/3", map, "testToken", ResponseDto.class).block();
+		
+		return ResponseEntity.ok().body(result);
+		
 	}
 	
 //	@GetMapping("/1")

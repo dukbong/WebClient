@@ -1,13 +1,19 @@
 package com.webclient.test.wc.apicomponent;
 
+import java.lang.reflect.Field;
+import java.net.ConnectException;
 import java.net.HttpCookie;
 import java.net.URI;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -17,6 +23,7 @@ import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,10 +60,9 @@ public class ApiWebClient {
 //	private String cookie;
 //	private String mainUrl;
 	
-	public void setRequestInfo(String baseUrl) {
-		log.info("====> set 호출");
-		baseUrlThreadLocal.set(baseUrl);
-	}
+//	public void setRequestInfo(String baseUrl) {
+//		baseUrlThreadLocal.set(baseUrl);
+//	}
 	
 	public String getBaseUrl() {
 		return baseUrlThreadLocal.get();
@@ -66,6 +72,7 @@ public class ApiWebClient {
 	}
 	
 	public void makeCookie(String key, String value) {
+		removeCookie(key);
 		HttpCookie cookie = new HttpCookie(key, value);
 		cookieStore.add(null, cookie);
 	}
@@ -77,7 +84,8 @@ public class ApiWebClient {
 //        return cookieString;
 //	}
 	
-	public void setCookie(String userId, String requestUrl) {
+	public void setCookie(String userId, String requestUrl, String baseUrl) {
+		baseUrlThreadLocal.set(baseUrl);
 		mainUrlThreadLocal.set(requestUrl);
 		makeCookie("userSn", userId);
 		makeCookie("url", requestUrl);
@@ -99,18 +107,18 @@ public class ApiWebClient {
 		return "UNKNOWN";
 	}
 	
-	public <T> Mono<T> postApi(String uri, Object vo, String token, Class<T> bodyType) {
+	private <T> Mono<T> requestApi(HttpMethod method, String uri, Object vo, String token, Class<T> bodyType) {
+		
 		DbInsertInfo dbInfo = new DbInsertInfo();
 		// 동시성 문제를 해결하고 시도한 횟수를 알기 위한 변수
 //		AtomicInteger retryCount = new AtomicInteger(1);
-		log.info("=============> {}", getBaseUrl());
 		String targetSubject = getSubjectName(portSearch(getBaseUrl()));
 		String mainSubject = getSubjectName(portSearch(getMainUrl()));
-		dbInfo.from(mainSubject).to(targetSubject).url(getBaseUrl() + uri).param(objectConvertJson(vo)).count(0);
+		dbInfo.from(mainSubject).to(targetSubject).url(getBaseUrl() + uri).param(objectConvertJson(vo)).count(0).method(method.name());
 		
-		makeCookie("to", mainSubject);
-		makeCookie("from", targetSubject);
-		makeCookie("count", dbInfo.getCount().toString());
+//		makeCookie("to", mainSubject);
+//		makeCookie("from", targetSubject);
+//		makeCookie("count", dbInfo.getCount().toString());
 //		cookie = new StringBuffer().append(cookie).append("; ")
 //								   .append("to=").append(mainSubject).append("; ")
 //								   .append("from=").append(targetSubject).append("; ")
@@ -118,26 +126,72 @@ public class ApiWebClient {
 //								   .toString();
 		ExchangeFilterFunction filterFunction = (clientRequest, nextFilter) -> {
 //			log.info("================================>");
-		    String cookieHeader = cookieStore.getCookies().stream()
-		            .peek(cookie -> {
-		                if (cookie.getName().equals("count")) {
-		                    cookie.setValue(dbInfo.countPlus().getCount().toString());
-		                }
-		            })
-		            .map(HttpCookie::toString)
-		            .collect(Collectors.joining("; "));
-//		    log.info("test : {} ", cookieHeader);
-		    // 새로운 쿠키 전달을 위함
-		    ClientRequest newRequest = ClientRequest.from(clientRequest)
-		            .header(HttpHeaders.COOKIE, cookieHeader)
-		            .build();
+			dbInfo.countPlus();
+//		    String cookieHeader = cookieStore.getCookies().stream()
+//		            .peek(cookie -> {
+//		                if (cookie.getName().equals("count")) {
+//		                    cookie.setValue(dbInfo.getCount().toString());
+//		                }
+//		            })
+//		            .map(HttpCookie::toString)
+//		            .collect(Collectors.joining("; "));
+			
+//		    String cookieHeader = cookieStore.getCookies().stream()
+//		            .map(cookie -> {
+//		                if (cookie.getName().equals("count")) {
+//		                    // count 쿠키만 값을 수정하고 나머지 쿠키는 그대로 사용
+//		                    return "count=" + dbInfo.getCount().toString();
+//		                } else {
+//		                    return cookie.toString();
+//		                }
+//		            })
+//		            .collect(Collectors.joining("; "));
+			
+//		    String cookieHeader = cookieStore.getCookies().stream()
+//		            .map(cookie -> {
+//		                if (cookie.getName().equals("count")) {
+//		                    // count 쿠키만 값을 수정하고 나머지 쿠키는 그대로 사용
+//		                    cookie.setValue(dbInfo.getCount().toString());
+//		                }
+//		                return cookie.toString();
+//		            })
+//		            .collect(Collectors.joining("; "));
+//		    
+//		    log.info("dbInfo filter header 만들기 후 ======> {}", dbInfo.toString());
+//		    log.info("cookie = {}", cookieHeader);
+////		    log.info("test : {} ", cookieHeader);
+//		    // 새로운 쿠키 전달을 위함
+//		    ClientRequest newRequest = ClientRequest.from(clientRequest)
+//		            .header(HttpHeaders.COOKIE, cookieHeader)
+//		            .build();
+			
+		        // 쿠키 값이 없을 경우, 새로운 count 쿠키를 추가합니다.
+		        Set<HttpCookie> cookies = new HashSet<>();
+		        cookies.add(new HttpCookie("count", dbInfo.getCount().toString()));
+		        cookies.add(new HttpCookie("to", mainSubject));
+		        cookies.add(new HttpCookie("from", targetSubject));
+		        List<HttpCookie> inCookies = cookieStore.getCookies();
+		        for(HttpCookie inCookie : inCookies) {
+		        	if(!inCookie.getName().equals("count")) {
+		        		cookies.add(new HttpCookie(inCookie.getName(), inCookie.getValue()));
+		        	}
+		        }
+		        // 헤더에 새로운 쿠키 추가
+		        clientRequest = ClientRequest.from(clientRequest)
+		                .header(HttpHeaders.COOKIE, cookies.stream().map(HttpCookie::toString).collect(Collectors.joining("; ")))
+		                .build();
+			
+		        for(HttpCookie setCookie : cookies) {
+		        	log.info("cookie : {} : {}", setCookie.getName(), setCookie.getValue());
+		        }
 //			log.info("================================>");
-		    return nextFilter.exchange(newRequest);
+			
+		    return nextFilter.exchange(clientRequest);
 		};
-		
 		// WebClient는 불변객체이므로 직접 변경은 불가능하다.
 		WebClient useClient = localWebClient.mutate().baseUrl(getBaseUrl())
 				.filter(filterFunction)
+				.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
 //		        .filter(ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
 //		            log.debug("Request: {} {}", clientRequest.method(), clientRequest.url());
 //		            clientRequest.headers().forEach((name, values) -> values.forEach(value -> log.debug("{} : {}", name, value)));
@@ -150,9 +204,21 @@ public class ApiWebClient {
 //		        }))
 				.build();
 //		useClient = useClient.filter(filterFunction);
-		return useClient.post().uri(uri).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+		WebClient.RequestHeadersSpec<?> requestSpec = null;
+		if(method.equals(HttpMethod.GET)) {
+			requestSpec = getSpec(uri, vo, useClient);
+		} else {
+			requestSpec = postSpec(uri, vo, useClient);
+		}
+		
+		
+		return requestSpec
+//				.post()
+//				.uri(uri)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 //				.header(HttpHeaders.COOKIE, cookieConvertString(cookieStore))
-				.body(BodyInserters.fromValue(vo)).accept(MediaType.APPLICATION_JSON).retrieve()
+//				.body(BodyInserters.fromValue(vo))
+				.accept(MediaType.APPLICATION_JSON).retrieve()
 				// [응답 서버로 부터 받은 에러를 log로 찍고 오류를 전파시키기]
 				.onStatus(HttpStatus::is4xxClientError, res -> {
 //					log.info("현재 URL : {}", baseUrl + uri);
@@ -201,13 +267,17 @@ public class ApiWebClient {
 						// :: 서버 에러가 날 경우 서버에서 조치하기 전엔 재시도 할 필요가 없기 때문이다.
 						.filter(error -> {
 							// 5xx 서버 에러인지 확인
-							boolean is5xxServerError = error instanceof WebClientResponseException
-									&& ((WebClientResponseException) error).getStatusCode().is5xxServerError();
-
-							// ReadTimeoutException 인지 확인
-							boolean isReadTimeoutException = error instanceof WebClientRequestException
-									&& error.getCause() instanceof TimeoutException;
-							
+//							boolean is5xxServerError = error instanceof WebClientResponseException
+//									&& ((WebClientResponseException) error).getStatusCode().is5xxServerError();
+//
+//							// ReadTimeoutException 인지 확인
+//							boolean isReadTimeoutException = error instanceof WebClientRequestException
+//									&& error.getCause() instanceof TimeoutException;
+//							
+//							// ConnectException 인지 확인
+//							boolean isConnectException = error instanceof WebClientRequestException
+//									&& error.getCause() instanceof ConnectException;
+//							
 //							boolean isCookieDNMTC = true;
 //							if (error instanceof WebClientResponseException) {
 //						        String responseBody = objectConvertJson(((WebClientResponseException) error).getResponseBodyAsString());
@@ -227,7 +297,11 @@ public class ApiWebClient {
 //							}
 							
 							// 5xx 서버 에러이거나 ReadTimeoutException이 아닌 경우에만 true를 반환
-							return !is5xxServerError && !isReadTimeoutException /*&& !isCookieDNMTC*/;
+//							return !is5xxServerError && !isReadTimeoutException && !isConnectException;
+							 return !(error instanceof WebClientResponseException
+					                    && ((WebClientResponseException) error).getStatusCode().is5xxServerError()
+					                    || error instanceof WebClientRequestException
+					                    && (error.getCause() instanceof TimeoutException || error.getCause() instanceof ConnectException));
 						})
 						// 재시도 하기 전 현재 시도에 대한 정보가 담겨 있다.
 						.doBeforeRetry(before -> {
@@ -274,16 +348,21 @@ public class ApiWebClient {
 //			            log.info(
 //			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
 //			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			        	ClientShowMessage = "서버에서 5xx 에러가 발생하였습니다.";
 			            saveToDb(dbInfo);
-			            ClientShowMessage = "서버에서 5xx 에러가 발생하였습니다.";
 			        } else if (error instanceof WebClientRequestException && error.getCause() instanceof TimeoutException) {
 //			            log.error("Read Timeout Exception occurred: {}", error.getMessage());
 //			            dbInfo.message(error.getMessage());
 //			            log.info(
 //			            		"DB Insert [END ERROR / Update] ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
 //			            		dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+			        	ClientShowMessage = "요청 시간이 초과하였습니다.";
+			        	dbInfo.message("응답 서버로 전달 되지 못한 에러 : " + ClientShowMessage);
 			            saveToDb(dbInfo);
-			            ClientShowMessage = "요청 시간이 초과하였습니다.";
+			        } else if (error instanceof WebClientRequestException && error.getCause() instanceof ConnectException) {
+			        	ClientShowMessage = "응답 서버와 연결에 실패하였습니다.";
+			        	dbInfo.message("응답 서버로 전달 되지 못한 에러 : " + ClientShowMessage);
+			        	saveToDb(dbInfo);
 			        } else {
 //			            log.error("Other error occurred: {}", error.getMessage());
 //			            dbInfo.message(error.getMessage());
@@ -303,7 +382,44 @@ public class ApiWebClient {
 //													LocalDate.now(), mainSubject, targetSubject, "요청 ID 아직 없음", (baseUrl + uri), "IP 아직 없음", 'N', param, success.toString());
 //													dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(),"요청 ID", dbInfo.getUrl(), "IP",dbInfo.getFlag(),dbInfo.getParam(), dbInfo.getMessage());
 					saveToDb(dbInfo);
+					
 				});
+	}
+	
+	private WebClient.RequestHeadersSpec<?> getSpec(String uri, Object vo, WebClient webClient) {
+	    UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(uri);
+
+	    if (vo instanceof Map<?, ?>) {
+	        @SuppressWarnings("unchecked")
+	        Map<String, String> paramMap = (Map<String, String>) vo;
+	        paramMap.forEach(uriBuilder::queryParam);
+	    } else {
+	        Class<?> clazz = vo.getClass();
+	        Field[] fields = clazz.getFields();
+	        for (Field field : fields) {
+	            try {
+	                field.setAccessible(true);
+	                String fieldName = field.getName();
+	                Object value = field.get(vo);
+	                uriBuilder.queryParam(fieldName, value);
+	            } catch (IllegalAccessException e) {
+	                throw new RuntimeException("현재 객체 필드에 접근할 수 없습니다.");
+	            }
+	        }
+	    }
+	    
+	    // 수정된 부분: null인 경우 빈 URI를 사용하지 않고 기존의 URI를 그대로 사용
+	    String requestUri = uriBuilder.build().toUriString();
+	    
+	    log.info("만든 URI : {}", requestUri);
+	    log.info("전체 URL : {}", getBaseUrl() + requestUri);
+
+	    // 수정된 부분: null인 경우 기존의 URI를 사용하도록 변경
+	    return webClient.method(HttpMethod.GET).uri(requestUri);
+	}
+
+	private WebClient.RequestHeadersSpec<?> postSpec(String uri, Object vo, WebClient webClient) {
+		return webClient.method(HttpMethod.POST).uri(uri).body(BodyInserters.fromValue(vo));
 	}
 	
 	private void removeCookie(String key) {
@@ -314,6 +430,17 @@ public class ApiWebClient {
 	    cookiesToRemove.forEach(cookie -> cookieStore.remove(null, cookie));
 	}
 	
+	
+	
+	public <T> Mono<T> request(HttpMethod method, String uri, Object vo, String token, Class<T> bodyType){
+		if(method.equals(HttpMethod.GET)) {
+			return requestApi(method, uri, vo, token, bodyType);
+		} else if (method.equals(HttpMethod.POST)) {
+			return requestApi(method, uri, vo, token, bodyType);
+		} else {
+			throw new RuntimeException("요청 방식에 문제가 생겼습니다.");
+		}
+	}
 	
 	private String objectConvertJson(Object obj){
 		try {
@@ -326,15 +453,15 @@ public class ApiWebClient {
 	
 	private void saveToDb(DbInsertInfo dbInfo) {
 		log.info(
-				"DB Insert ==> 요청시간 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
-				dbInfo.getTime(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
+				"DB Insert ==> 요청시간 : {}, 요청 방법 : {}, 요청 횟수 : {}, From : {}, To : {}, 요청ID : {},  url : {}, IP : {},  구분 : {}, param : {}, 응답 메시지 {}",
+				dbInfo.getTime(), dbInfo.getMethod(), dbInfo.getCount(), dbInfo.getFrom(), dbInfo.getTo(), "요청 ID 아직 없음", dbInfo.getUrl(), "IP 아직 없음", dbInfo.getFlag(), dbInfo.getParam(), dbInfo.getMessage());
 		
 		Optional<DbInsertEntity> findEntity = dbInsertEntityRepository.findByCountAndRequestTime(dbInfo.getCount(), dbInfo.getTime());
 		if(findEntity.isPresent()) {
 			String entityMessage = findEntity.get().getMessage();
-			log.error("==================> {}", entityMessage);
+//			log.error("==================> {}", entityMessage);
 			String message = dbInfo.getMessage();
-			log.error("==================> {}", message);
+//			log.error("==================> {}", message);
 			findEntity.get().updateMessage(entityMessage + "\n" + message);
 			dbInsertEntityRepository.save(findEntity.get());
 			return;
